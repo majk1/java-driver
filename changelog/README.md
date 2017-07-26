@@ -1,5 +1,10 @@
 ## Changelog
 
+### 3.3.1 (In progress)
+
+- [bug] JAVA-1582: Consistently order udts in KeyspaceMetadata.exportAsString.
+
+
 ### 3.3.0
 
 - [bug] JAVA-1469: Update LoggingRetryPolicy to deal with SLF4J-353.
