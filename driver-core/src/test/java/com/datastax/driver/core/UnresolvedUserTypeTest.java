@@ -28,6 +28,42 @@ import static com.datastax.driver.core.DataType.*;
 @CassandraVersion("3.0")
 public class UnresolvedUserTypeTest extends CCMTestsSupport {
 
+    private static final String keyspace = "unresolved_user_type_test";
+
+    private static final String expectedSchema = "CREATE KEYSPACE unresolved_user_type_test WITH REPLICATION = { 'class' : 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': '1' } AND DURABLE_WRITES = true;\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.g (\n" +
+            "    f1 int\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.h (\n" +
+            "    f1 int\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"E\" (\n" +
+            "    f1 frozen<list<frozen<unresolved_user_type_test.g>>>\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"F\" (\n" +
+            "    f1 frozen<unresolved_user_type_test.h>\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"D\" (\n" +
+            "    f1 frozen<tuple<\"F\", g, h>>\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"B\" (\n" +
+            "    f1 frozen<set<frozen<unresolved_user_type_test.\"D\">>>\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"C\" (\n" +
+            "    f1 frozen<map<frozen<unresolved_user_type_test.\"E\">, frozen<unresolved_user_type_test.\"D\">>>\n" +
+            ");\n" +
+            "\n" +
+            "CREATE TYPE unresolved_user_type_test.\"A\" (\n" +
+            "    f1 frozen<unresolved_user_type_test.\"C\">\n" +
+            ");\n";
+
     @Override
     public void onTestContextInitialized() {
         execute(
@@ -45,8 +81,9 @@ public class UnresolvedUserTypeTest extends CCMTestsSupport {
                  |
                  A
 
-             Topological sort order should be : GH,FE,D,CB,A
+             Topological sort order should be : gh,FE,D,CB,A
              */
+                "CREATE KEYSPACE unresolved_user_type_test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'}",
                 String.format("CREATE TYPE %s.h (f1 int)", keyspace),
                 String.format("CREATE TYPE %s.g (f1 int)", keyspace),
                 String.format("CREATE TYPE %s.\"F\" (f1 frozen<h>)", keyspace),
@@ -106,12 +143,7 @@ public class UnresolvedUserTypeTest extends CCMTestsSupport {
 
         String script = keyspaceMetadata.exportAsString();
 
-        assertThat(script.indexOf(a.exportAsString())).isGreaterThan(script.indexOf(b.exportAsString())).isGreaterThan(script.indexOf(c.exportAsString()));
-        assertThat(script.indexOf(b.exportAsString())).isGreaterThan(script.indexOf(d.exportAsString()));
-        assertThat(script.indexOf(c.exportAsString())).isGreaterThan(script.indexOf(d.exportAsString()));
-        assertThat(script.indexOf(d.exportAsString())).isGreaterThan(script.indexOf(e.exportAsString())).isGreaterThan(script.indexOf(f.exportAsString()));
-        assertThat(script.indexOf(e.exportAsString())).isGreaterThan(script.indexOf(g.exportAsString())).isGreaterThan(script.indexOf(h.exportAsString()));
-        assertThat(script.indexOf(f.exportAsString())).isGreaterThan(script.indexOf(g.exportAsString())).isGreaterThan(script.indexOf(h.exportAsString()));
-
+        // validate against a strict expectation that the schema is exactly as defined.
+        assertThat(script).isEqualTo(expectedSchema);
     }
 }

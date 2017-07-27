@@ -243,6 +243,14 @@ public class KeyspaceMetadata {
         return aggregates.remove(fullName);
     }
 
+    // Used by maybeSortUdts to sort at each dependency group alphabetically.
+    private static final Comparator<UserType> sortByTypeName = new Comparator<UserType>() {
+        @Override
+        public int compare(UserType o1, UserType o2) {
+            return o1.getTypeName().compareTo(o2.getTypeName());
+        }
+    };
+
     /**
      * Returns a {@code String} containing CQL queries representing this
      * keyspace and the user types and tables it contains.
@@ -262,8 +270,19 @@ public class KeyspaceMetadata {
 
         sb.append(asCQLQuery()).append('\n');
 
-        for (UserType udt : userTypes.values())
+        // Re sort user types topologically so ordering is always consistent.
+        List<UserType> unsortedTypes = new ArrayList<UserType>(userTypes.values());
+        DirectedGraph<UserType> graph = new DirectedGraph<UserType>(sortByTypeName, unsortedTypes);
+        for (UserType from : unsortedTypes) {
+            for (UserType to : unsortedTypes) {
+                if (from != to && dependsOn(to, from))
+                    graph.addEdge(from, to);
+            }
+        }
+        List<UserType> sortedTypes = graph.topologicalSort();
+        for (UserType udt : sortedTypes) {
             sb.append('\n').append(udt.exportAsString()).append('\n');
+        }
 
         for (TableMetadata tm : tables.values())
             sb.append('\n').append(tm.exportAsString()).append('\n');
@@ -275,6 +294,31 @@ public class KeyspaceMetadata {
             sb.append('\n').append(am.exportAsString()).append('\n');
 
         return sb.toString();
+    }
+
+    private boolean dependsOn(UserType udt1, UserType udt2) {
+        for (String fieldName : udt1.getFieldNames()) {
+            DataType fieldType = udt1.getFieldType(fieldName);
+            if (references(fieldType, udt2))
+                return true;
+        }
+        return false;
+    }
+
+    private boolean references(DataType dataType, DataType udtType) {
+        if (dataType.equals(udtType))
+            return true;
+        for (DataType arg : dataType.getTypeArguments()) {
+            if (references(arg, udtType))
+                return true;
+        }
+        if (dataType instanceof TupleType) {
+            for (DataType arg : ((TupleType) dataType).getComponentTypes()) {
+                if (references(arg, udtType))
+                    return true;
+            }
+        }
+        return false;
     }
 
     /**
