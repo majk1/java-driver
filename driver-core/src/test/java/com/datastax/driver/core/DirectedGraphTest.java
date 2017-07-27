@@ -71,7 +71,6 @@ public class DirectedGraphTest {
         // Topological sort order should be : GH,E,F,D,BC,A
         // There's no guarantee on the order within the same level, so we use sublists:
         List<String> sorted = g.topologicalSort();
-        System.out.println(sorted);
         assertThat(sorted.subList(0, 2))
                 .containsExactly("G", "H");
         assertThat(sorted.subList(2, 3))
@@ -122,7 +121,6 @@ public class DirectedGraphTest {
         // Topological sort order should be : [7,6],[5],[10],[2,1],[0]
         // There's no guarantee on the order within the same level, so we use sublists:
         List<Integer> sorted = g.topologicalSort();
-        System.out.println(sorted);
         assertThat(sorted.subList(0, 2))
                 .containsExactly(7, 6);
         // 5 comes before 10 even though they appear at the same depth.  This happens because 5's (7) dependency
