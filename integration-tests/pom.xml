@@ -85,6 +85,8 @@
               <reportNameSuffix>short</reportNameSuffix>
               <parallel>classes</parallel>
               <threadCountClasses>8</threadCountClasses>
+              <!-- set so test can exit with rc 0 (ci will mark test failures accordingly) -->
+              <testFailureIgnore>true</testFailureIgnore>
             </configuration>
           </execution>
         </executions>
@@ -122,6 +124,7 @@
                 <configuration>
                   <groups>com.datastax.oss.driver.categories.LongTests</groups>
                   <reportNameSuffix>long</reportNameSuffix>
+                  <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
               </execution>
               <!-- add a special execution that only runs isolated tests each in their own fork -->
@@ -137,6 +140,7 @@
                   <!-- run each test in it's own jvm fork -->
                   <forkCount>1</forkCount>
                   <reuseForks>false</reuseForks>
+                  <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
               </execution>
             </executions>
