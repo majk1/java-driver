@@ -30,20 +30,14 @@ import com.datastax.oss.driver.api.core.session.Session;
 import com.datastax.oss.driver.api.testinfra.ccm.CcmRule;
 import com.datastax.oss.driver.api.testinfra.cluster.ClusterUtils;
 import com.datastax.oss.driver.api.testinfra.simulacron.SimulacronRule;
-import com.datastax.oss.driver.categories.LongTests;
-import com.datastax.oss.driver.internal.core.config.typesafe.DefaultDriverConfigLoader;
 import com.datastax.oss.simulacron.common.cluster.ClusterSpec;
 import com.datastax.oss.simulacron.common.cluster.QueryLog;
-import com.typesafe.config.ConfigFactory;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.junit.rules.ExpectedException;
 
-import static com.datastax.oss.driver.internal.core.config.typesafe.DefaultDriverConfigLoader.DEFAULT_CONFIG_SUPPLIER;
 import static com.datastax.oss.simulacron.common.stubbing.PrimeDsl.noRows;
 import static com.datastax.oss.simulacron.common.stubbing.PrimeDsl.serverError;
 import static com.datastax.oss.simulacron.common.stubbing.PrimeDsl.when;
@@ -221,128 +215,6 @@ public class DriverConfigProfileIT {
       assertThat(result.getAvailableWithoutFetching()).isEqualTo(20);
 
       ClusterUtils.dropKeyspace(profileCluster, keyspace, slowProfile);
-    }
-  }
-
-  @Test
-  @Category(LongTests.class)
-  public void should_periodically_reload_configuration() throws Exception {
-    String query = "mockquery";
-    // Define a loader which configures a reload interval of 2s and current value of configSource.
-    AtomicReference<String> configSource = new AtomicReference<>("");
-    DefaultDriverConfigLoader loader =
-        new DefaultDriverConfigLoader(
-            () ->
-                ConfigFactory.parseString("config-reload-interval = 2s\n" + configSource.get())
-                    .withFallback(DEFAULT_CONFIG_SUPPLIER.get()),
-            CoreDriverOption.values());
-    try (Cluster configCluster =
-        Cluster.builder()
-            .withConfigLoader(loader)
-            .addContactPoints(simulacron.getContactPoints())
-            .build()) {
-      simulacron.cluster().prime(when(query).then(noRows()).delay(2, TimeUnit.SECONDS));
-
-      Session session = configCluster.connect();
-
-      // Expect timeout since default timeout is .5 s
-      try {
-        session.execute(query);
-        fail("DriverTimeoutException expected");
-      } catch (DriverTimeoutException e) {
-        // expected.
-      }
-
-      // Bump up request timeout to 10 seconds and wait for config to reload.
-      configSource.set("request.timeout = 10s");
-      TimeUnit.SECONDS.sleep(3);
-
-      // Execute again, should not timeout.
-      session.execute(query);
-    }
-  }
-
-  @Test
-  @Category(LongTests.class)
-  public void should_not_allow_dynamically_adding_profile() throws Exception {
-    String query = "mockquery";
-    // Define a loader which configures a reload interval of 2s and current value of configSource.
-    AtomicReference<String> configSource = new AtomicReference<>("");
-    DefaultDriverConfigLoader loader =
-        new DefaultDriverConfigLoader(
-            () ->
-                ConfigFactory.parseString("config-reload-interval = 2s\n" + configSource.get())
-                    .withFallback(DEFAULT_CONFIG_SUPPLIER.get()),
-            CoreDriverOption.values());
-    try (Cluster configCluster =
-        Cluster.builder()
-            .withConfigLoader(loader)
-            .addContactPoints(simulacron.getContactPoints())
-            .build()) {
-      simulacron.cluster().prime(when(query).then(noRows()).delay(1, TimeUnit.SECONDS));
-
-      Session session = configCluster.connect();
-
-      // Expect failure because profile doesn't exist.
-      try {
-        session.execute(SimpleStatement.builder(query).withConfigProfileName("slow").build());
-        fail("Expected IllegalArgumentException");
-      } catch (IllegalArgumentException e) {
-        // expected.
-      }
-
-      // Bump up request timeout to 10 seconds on profile and wait for config to reload.
-      configSource.set("profiles.slow.request.timeout = 2s");
-      TimeUnit.SECONDS.sleep(3);
-
-      // Execute again, should expect to fail again because doesn't allow to dynamically define profile.
-      try {
-        session.execute(SimpleStatement.builder(query).withConfigProfileName("slow").build());
-        fail("Expected IllegalArgumentException");
-      } catch (IllegalArgumentException e) {
-        // expected.
-      }
-    }
-  }
-
-  @Test
-  @Category(LongTests.class)
-  public void should_reload_profile_config_when_reloading_config() throws Exception {
-    String query = "mockquery";
-    // Define a loader which configures a reload interval of 2s and current value of configSource.
-    // Define initial profile settings so it initially exists.
-    AtomicReference<String> configSource = new AtomicReference<>("");
-    DefaultDriverConfigLoader loader =
-        new DefaultDriverConfigLoader(
-            () ->
-                ConfigFactory.parseString(
-                        "profiles.slow.request.consistency = ONE\nconfig-reload-interval = 2s\n"
-                            + configSource.get())
-                    .withFallback(DEFAULT_CONFIG_SUPPLIER.get()),
-            CoreDriverOption.values());
-    try (Cluster configCluster =
-        Cluster.builder()
-            .withConfigLoader(loader)
-            .addContactPoints(simulacron.getContactPoints())
-            .build()) {
-      simulacron.cluster().prime(when(query).then(noRows()).delay(1, TimeUnit.SECONDS));
-
-      Session session = configCluster.connect();
-
-      // Expect failure because profile doesn't exist.
-      try {
-        session.execute(SimpleStatement.builder(query).withConfigProfileName("slow").build());
-        fail("Expected DriverTimeoutException");
-      } catch (DriverTimeoutException e) {
-        // expected.
-      }
-
-      // Bump up request timeout to 10 seconds on profile and wait for config to reload.
-      configSource.set("profiles.slow.request.timeout = 10s");
-      TimeUnit.SECONDS.sleep(3);
-
-      // Execute again, should succeed because profile timeout was increased.
-      session.execute(SimpleStatement.builder(query).withConfigProfileName("slow").build());
     }
   }
 }
